@@ -1,0 +1,44 @@
+version: "2"
+
+services:
+  
+  database:
+    image: postgres:9.3
+    container_name: cafw_database
+    
+  conjur:
+    image: cyberark/conjur
+    container_name: cafw_conjur
+    command: server
+    environment:
+      DATABASE_URL: postgres://postgres@database/postgres
+      CONJUR_DATA_KEY: 
+    depends_on: [ database ]
+    ports:
+      - "8080:80"
+      - "8443:443"
+      
+  client:
+    image: conjurinc/cli5
+    container_name: cafw_client
+    entrypoint: sleep
+    command: infinity
+    environment:
+      CONJUR_APPLIANCE_URL: http://conjur
+      CONJUR_ACCOUNT: 
+      CONJUR_AUTHN_API_KEY: 
+      CONJUR_AUTHN_LOGIN: admin
+    depends_on: [ conjur ]
+    
+  scope:
+    image: weaveworks/scope
+    container_name: cafw_scope
+    network_mode: "host"
+    pid: "host"
+    privileged: true
+    labels:
+      - "works.weave.role=system"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:rw"
+    command:
+      - "--probe.docker=true"

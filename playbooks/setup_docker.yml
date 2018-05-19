@@ -1,0 +1,22 @@
+- hosts: localhost
+  connection: local
+  
+  roles:
+  - role: drhelius.docker
+    docker_compose: yes
+    docker_compose_version: 1.21.0
+      
+  tasks:
+  - name: Upgrade latest pip, setuptools, docker-py and docker-compose
+    pip:
+      name: "{{ item.name }}"
+      state: "{{ item.version }}"
+    with_items:
+      - { name: pip, version: "latest", install: true }
+      - { name: setuptools, version: "latest", install: true }
+      - { name: docker-py, version: "latest", install: true }
+      - { name: docker-compose, version: "latest", install: true }
+      - { name: docker, version: "latest", install: true }
+      - { name: requests, version: "latest", install: true }
+    when: ( item.install )
+    ignore_errors: yes

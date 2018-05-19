@@ -1,0 +1,125 @@
+#!/bin/bash
+#
+# Sets up the initial Ansible & Conjur OSS Framework
+set -eo pipefail
+
+. ./functions
+
+export SERVER_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'|grep -v 172*)
+export AWX_PASSWORD=$(openssl rand -hex 12)
+export CONJUR_ACCOUNT=cafw_demo
+
+rm -rf ./workspace
+mkdir ./workspace
+
+announce "Ansible"
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+[[ -n `which ansible-playbook` ]] || $DIR/install_ansible
+
+ansible-galaxy install cyberark.conjur
+ansible-galaxy install drhelius.docker
+
+printf "\n\nAnsible is ready!\n\n"
+
+announce "Docker Platform"
+
+pushd playbooks/
+  ansible-playbook setup_docker.yml
+popd
+
+announce "Pull Images"
+
+docker-compose pull
+
+announce "Generate Conjur Data Key"
+
+docker-compose run --no-deps conjur data-key generate > data_key
+export CONJUR_DATA_KEY="$(< data_key)"
+
+announce "Deploy Containers"
+
+SERVER_IP=${SERVER_IP} \
+docker-compose up -d
+
+announce "Setup iptables"
+
+pushd playbooks/
+  ansible-playbook setup_iptables.yml
+popd
+
+announce "Setup Conjur Account"
+
+sleep 5
+CONJUR_ADMIN_API=$(docker-compose exec conjur conjurctl account create ${CONJUR_ACCOUNT})
+CONJUR_PASSWORD=$(echo ${CONJUR_ADMIN_API}|sed 's/.* //')
+
+announce "Download Summon"
+
+curl -L -o downloads/summon.tar.gz https://github.com/cyberark/summon/releases/download/v0.6.6/summon-linux-amd64.tar.gz
+curl -L -o downloads/summon-conjur.tar.gz https://github.com/cyberark/summon-conjur/releases/download/v0.5.0/summon-conjur-linux-amd64.tar.gz
+
+pushd downloads/
+  tar -zvxf summon.tar.gz
+  tar -zvxf summon-conjur.tar.gz
+popd
+
+announce "Setup AWX"
+
+pushd downloads/
+  pip uninstall -y docker-py
+  pip uninstall -y docker
+  pip install docker
+  
+  if [ ! -d awx ]; then
+    git clone https://github.com/ansible/awx.git
+  fi
+popd
+
+pushd downloads/awx/installer/
+  sed -i "s,host_port=80,host_port=34080,g" ./inventory
+  sed -i "s,.*default_admin_password=.*,default_admin_password=${AWX_PASSWORD},g" ./inventory
+  sed -i "s,# default_admin_user=admin,default_admin_user=admin,g" ./inventory
+  ansible-playbook -i inventory install.yml
+popd
+
+docker network connect cafw_default rabbitmq
+docker network connect cafw_default postgres
+docker network connect cafw_default memcached
+docker network connect cafw_default awx_web
+docker network connect cafw_default awx_task
+
+announce "Create Docker Service Account"
+
+pushd playbooks/
+  ansible-playbook create_dockeruser.yml
+  DOCKER_SSH_KEY="/home/cafw_service_account/.ssh/id_rsa"
+popd
+
+announce "Save Details to Result File"
+
+pushd workspace/
+  cat > ./config << EOL
+  SERVER_IP=${SERVER_IP}
+  CONJUR_DATA_KEY=${CONJUR_DATA_KEY}
+  CONJUR_URL=conjur.${SERVER_IP}.xip.io:8080
+  CONJUR_USER=admin
+  CONJUR_PASS=${CONJUR_PASSWORD}
+  CONJUR_ACCOUNT=${CONJUR_ACCOUNT}
+  SCOPE_URL=scope.${SERVER_IP}.xip.io:4040
+  AWX_URL=awx.${SERVER_IP}.xip.io:34080
+  AWX_USER=admin
+  AWX_PASS=${AWX_PASSWORD}
+  DOCKER_SSH_USER=cafw_service_account
+  DOCKER_SSH_KEY="${DOCKER_SSH_KEY}"
+  EOL
+  
+  cat > ./conjur_config << EOL
+  CONJUR_API="${CONJUR_ADMIN_API}"
+  EOL
+popd
+
+rm -f data_key
+
+announce "Framework has been setup!"

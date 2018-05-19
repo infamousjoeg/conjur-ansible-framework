@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# Prints the login details from 0-setup-framework
+
+pushd workspace/
+  source config
+popd
+
+cat << EOF
+Conjur-Ansible Framework Login Details
+
+[ General ]
+Server IP:  ${SERVER_IP}
+
+[ Scope ]
+URL:  http://${SCOPE_URL}
+
+[ AWX ]
+URL:  http://${AWX_URL}
+User:  ${AWX_USER}
+Pass:  ${AWX_PASS}
+
+[ Conjur ]
+URL: http://${CONJUR_URL}
+User: ${CONJUR_USER}
+Pass: ${CONJUR_PASS}
+
+EOF
