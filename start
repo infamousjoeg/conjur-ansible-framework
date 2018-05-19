@@ -1,0 +1,7 @@
+#!/bin/bash
+#
+# Start entire orchestration in one script
+set -eo pipefail
+
+. ./functions
+

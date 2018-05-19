@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# Installs all dependencies required for this framework
+set -eo pipefail
+
+. ./functions
+
+main() {
+  announce "Detecting Package Manager"
+  $PM = packagemanager
+  announce "Detected $PM Package Manager"
+  announce "Installing Docker Community Edition (CE)"
+  install_dockerce
+  announce "Installing Docker Compose"
+  install_dockercompose
+  announce "Dependencies installed"
+}
+
+#######################################
+# Installs Docker CE from internet
+# Globals:
+#   USERNAME
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
+install_dockerce() {
+  sudo curl -fsSL http://get.docker.com -o get-docker.sh
+  ./get-docker.sh
+  sudo usermod -aG docker $USERNAME
+  newgrp docker
+}
+
+#######################################
+# Installs Docker Compose from internet
+# Globals:
+#   None
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
+install_dockercompose() {
+  sudo curl -L https://github.com/docker/compose/releases/download/1.18.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+  sudo chmod +x /usr/local/bin/docker-compose
+}
+
+#######################################
+# Installs Python & pip
+# Globals:
+#   None
+# Arguments:
+#   Package Manager to use
+# Returns:
+#   None
+#######################################
+install_python() {
+  if [ $@ == "yum" ]; then
+    # Do yum stuff here
+  elif [ $@ == "apt-get" ]; then
+    # Do apt-get stuff here
+  fi 
+}
+
+main $@

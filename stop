@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# Stop all running containers and cleanup workspace
+set -eo pipefail
+
+. ./functions
+
+announce "Bringing down all running containers."
+
+docker-compose down --remove-orphans
+
+announce "Cleaning up orphaned artifacts in workspace."
+
+rm -f ./playbooks/*.retry
+
+announce "Cleanup complete."
